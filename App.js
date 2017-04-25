@@ -1,43 +1,12 @@
 import React, { Component } from 'react';
 import {
-  AppRegistry, Image, StyleSheet, Text, View, Animated, TouchableWithoutFeedback
+  AppRegistry, Image, StyleSheet, Text, View, Animated, TouchableOpacity
 } from 'react-native';
 
-import Heart from "./src/Heart";
-
-const getTransformationAnimations = (animation, scale, y, x, rotate, opacity) => {
-  const scaleAnimation = animation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, scale]
-  })
-
-  const xAnimation = animation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, x]
-  })
-
-  const yAnimation = animation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, y]
-  })
-
-  const rotateAnimation = animation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", rotate ]
-  })
-
-  const opacityAnimation = animation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, opacity ]
-  })
-
+const getTransformStyle = (animation) => {
   return {
-    opacity: opacityAnimation,
     transform: [
-      {scale: scaleAnimation},
-      {translateX: xAnimation},
-      {translateY: yAnimation},
-      {rotate: rotateAnimation}
+      {translateY: animation}
     ]
   }
 }
@@ -46,78 +15,83 @@ export default class RNanimations extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      liked: false,
-      scale: new Animated.Value(0),
-      animations: [
-        new Animated.Value(0),
-        new Animated.Value(0),
-        new Animated.Value(0),
+      animate: new Animated.Value(0),
+      fabs: [
         new Animated.Value(0),
         new Animated.Value(0),
         new Animated.Value(0),
       ]
     }
-    this.triggerLike = this.triggerLike.bind(this);
+    this.open = false;
+    this.handlePress = this.handlePress.bind(this);
   }
-  triggerLike() {
-    this.setState({
-      liked: !this.state.liked
-    })
 
-    const showAnimations = this.state.animations.map((animation) => {
-      return Animated.spring(animation, {
-        toValue: 1,
-        friction: 4
+  handlePress() {
+    const toValue = this.open ? 0 : 1;
+    const flyouts = this.state.fabs.map((value, i) => {
+      return Animated.spring(value, {
+        toValue: (i + 1) * -90 * toValue,
+        friction: 5
       })
     })
-
-    const hideAnimations = this.state.animations.map((animation) => {
-      return Animated.timing(animation, {
-        toValue: 0,
-        duration: 50
-      })
-    }).reverse();
-
     Animated.parallel([
-      Animated.spring(this.state.scale, {
-        toValue: 2,
-        friction: 3
+      Animated.timing(this.state.animate, {
+        toValue,
+        duration: 300
       }),
-      Animated.sequence([
-        Animated.stagger(50, showAnimations),
-        Animated.delay(100),
-        Animated.stagger(50, hideAnimations),
-      ])
-    ]).start(() => {
-      this.state.scale.setValue(0)
-    })
-
+      Animated.stagger(30, flyouts)
+    ]).start();
+    this.open = !this.open;
   }
 
   render() {
-    const bouncyHeart = this.state.scale.interpolate({
-      inputRange: [0, 1, 2],
-      outputRange: [1, .8, 1]
+    const backgroundInterpolate = this.state.animate.interpolate({
+      inputRange:[0, 1],
+      outputRange: ['rgb(90,34,153)', 'rgb(36,11,63)']
     })
-    const heartButtonStyle = {
-      transform: [ {scale: bouncyHeart} ]
+
+    const backgroundStyle = {
+      backgroundColor: backgroundInterpolate
     }
+
+    const buttonColorInterpolate =  this.state.animate.interpolate({
+      inputRange:[0, 1],
+      outputRange: ['rgb(24,214,255)', 'rgb(255,255,255)']
+    })
+
+    const buttonRotate = this.state.animate.interpolate({
+      inputRange:[0, 1],
+      outputRange: ['0deg', '135deg']
+    })
+
+    const buttonStyle = {
+      backgroundColor: buttonColorInterpolate,
+      transform: [
+        {rotate: buttonRotate}
+      ]
+    }
+
     return (
-      <View style={styles.container}>
-        <View>
-          <Heart filled style={[styles.heart, getTransformationAnimations(this.state.animations[5], .4, -280, 0, "10deg", .7)]} />
-          <Heart filled style={[styles.heart, getTransformationAnimations(this.state.animations[4], .7, -120, 40, "45deg", .5)]} />
-          <Heart filled style={[styles.heart, getTransformationAnimations(this.state.animations[3], .8, -120 , -40, "-45deg", .3)]} />
-          <Heart filled style={[styles.heart, getTransformationAnimations(this.state.animations[2], .3, -150, 120, "-35deg", .6)]} />
-          <Heart filled style={[styles.heart, getTransformationAnimations(this.state.animations[1], .3, -120, -120, "-35deg", .7)]} />
-          <Heart filled style={[styles.heart, getTransformationAnimations(this.state.animations[0], .8, -60, 0, "35deg", .8)]} />
-          <TouchableWithoutFeedback onPress={this.triggerLike}>
-            <Animated.View style={heartButtonStyle}>
-              <Heart filled={this.state.liked}/>
+      <Animated.View style={[styles.container, backgroundStyle]}>
+        <View style={styles.position}>
+          {
+            this.state.fabs.map((animation, i) => {
+              return (
+                <TouchableOpacity
+                  key={i}
+                  style={[styles.button, styles.fabs, styles.flyout, getTransformStyle(animation)]}
+                  onPress={this.handlePress}
+                />
+              )
+            })
+          }
+          <TouchableOpacity onPress={this.handlePress}>
+            <Animated.View style={[styles.button, buttonStyle]}>
+              <Text style={styles.plus}>+</Text>
             </Animated.View>
-          </TouchableWithoutFeedback>
+          </TouchableOpacity>
         </View>
-      </View>
+      </Animated.View>
     );
   }
 }
@@ -125,14 +99,31 @@ export default class RNanimations extends Component {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF',
-    justifyContent: "center",
-    alignItems: "center",
   },
-  heart: {
+  position: {
     position: "absolute",
-    top: 0,
-    left: 0
+    right: 45,
+    bottom: 45
+  },
+  fabs: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+  },
+  button: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  flyout: {
+    backgroundColor: "#9439FF"
+  },
+  plus: {
+    fontWeight: "bold",
+     fontSize: 30,
+     color: "#00768F"
   }
 });
 
