@@ -1,6 +1,14 @@
 import React, { Component } from 'react';
 import {
-  AppRegistry, Image, StyleSheet, Text, View, Animated, TouchableOpacity
+  AppRegistry,
+  StyleSheet,
+  Text,
+  View,
+  PanResponder,
+  Animated,
+  TextInput,
+  ScrollView,
+  TouchableOpacity
 } from 'react-native';
 
 const getTransformStyle = (animation) => {
@@ -12,86 +20,112 @@ const getTransformStyle = (animation) => {
 }
 
 export default class RNanimations extends Component {
-  constructor(props) {
-    super(props);
-    this.state = {
-      animate: new Animated.Value(0),
-      fabs: [
-        new Animated.Value(0),
-        new Animated.Value(0),
-        new Animated.Value(0),
-      ]
-    }
-    this.open = false;
-    this.handlePress = this.handlePress.bind(this);
-  }
+  componentWillMount() {
+    this.animated = new Animated.Value(0);
+    this.animatedMargin = new Animated.Value(0),
+    this.scrollOffset = 0;
+    this.contentHeight = 0;
+    this.scrollViewHeight = 0;
 
-  handlePress() {
-    const toValue = this.open ? 0 : 1;
-    const flyouts = this.state.fabs.map((value, i) => {
-      return Animated.spring(value, {
-        toValue: (i + 1) * -90 * toValue,
-        friction: 5
-      })
+    this.panResponder = PanResponder.create({
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        const { dy } = gestureState;
+        const totalScrollHeight = this.scrollOffset - this.scrollViewHeight;
+
+        if(
+          (this.scrollOffset < 0 && dy > 0) ||
+          ((totalScrollHeight > this.contentHeight) && dy < 0)
+        ) {
+          return true;
+        }
+      },
+      onPanResponderMove: (e, gestureState) => {
+        const { dy } = gestureState;
+        if (dy < 0) {
+          this.animated.setValue(dy);
+        } else if (dy > 0) {
+          this.animatedMargin.setValue(dy);
+        }
+      },
+      onPanResponderRelease: (e, gestureState) => {
+        const {dy} = gestureState;
+        if (dy < -150) {
+          Animated.parallel([
+            Animated.timing(this.animated, {
+              toValue: -400,
+              duration: 150,
+            }),
+            Animated.timing(this.animatedMargin, {
+              toValue: 0,
+              duration: 150,
+            })
+          ]).start();
+        } else if (dy > -150 && dy < 150) {
+          Animated.parallel([
+            Animated.timing(this.animated, {
+              toValue: 0,
+              duration: 150,
+            }),
+            Animated.timing(this.animatedMargin, {
+              toValue: 0,
+              duration: 150,
+            })
+          ]).start();
+        } else if (dy > 150) {
+          Animated.timing(this.animated, {
+            toValue: 400,
+            duration: 300
+          }).start();
+        }
+      },
     })
-    Animated.parallel([
-      Animated.timing(this.state.animate, {
-        toValue,
-        duration: 300
-      }),
-      Animated.stagger(30, flyouts)
-    ]).start();
-    this.open = !this.open;
   }
 
   render() {
-    const backgroundInterpolate = this.state.animate.interpolate({
-      inputRange:[0, 1],
-      outputRange: ['rgb(90,34,153)', 'rgb(36,11,63)']
-    })
-
-    const backgroundStyle = {
-      backgroundColor: backgroundInterpolate
+    const spacerStyle = {
+      marginTop: this.animatedMargin,
     }
 
-    const buttonColorInterpolate =  this.state.animate.interpolate({
-      inputRange:[0, 1],
-      outputRange: ['rgb(24,214,255)', 'rgb(255,255,255)']
+    const opacityInterpolate = this.animated.interpolate({
+      inputRange: [-400, 0, 400],
+      outputRange: [0, 1, 0]
     })
 
-    const buttonRotate = this.state.animate.interpolate({
-      inputRange:[0, 1],
-      outputRange: ['0deg', '135deg']
-    })
-
-    const buttonStyle = {
-      backgroundColor: buttonColorInterpolate,
+    const modalStyle = {
       transform: [
-        {rotate: buttonRotate}
-      ]
+        { translateY: this.animated }
+      ],
+      opacity: opacityInterpolate
     }
 
     return (
-      <Animated.View style={[styles.container, backgroundStyle]}>
-        <View style={styles.position}>
-          {
-            this.state.fabs.map((animation, i) => {
-              return (
-                <TouchableOpacity
-                  key={i}
-                  style={[styles.button, styles.fabs, styles.flyout, getTransformStyle(animation)]}
-                  onPress={this.handlePress}
-                />
-              )
-            })
-          }
-          <TouchableOpacity onPress={this.handlePress}>
-            <Animated.View style={[styles.button, buttonStyle]}>
-              <Text style={styles.plus}>+</Text>
-            </Animated.View>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
+      <View style={styles.container}>
+        <Animated.View style={spacerStyle}/>
+        <Animated.View
+          style={[styles.modal, modalStyle]}
+          {...this.panResponder.panHandlers}
+        >
+          <View style={styles.comments}>
+            <ScrollView
+              scrollEventThrottle={16}
+              onScroll={event => {
+                this.scrollOffset = event.nativeEvent.contentOffset.y;
+                this.scrollViewHeight = event.nativeEvent.layoutMeasurement.height;
+              }}
+              onContentSizeChange={(contentWidth, contentHeight) => {
+                this.contentHeight = contentHeight;
+              }}
+            >
+              <Text style={styles.fakeText}>Top</Text>
+              <Text style={styles.fakeComments} />
+              <Text style={styles.fakeText}>Bottom</Text>
+            </ScrollView>
+          </View>
+          <View style={styles.inputWrap}>
+            <TextInput style={styles.textInput} placeholder="Comment"/>
+          </View>
+        </Animated.View>
+      </View>
     );
   }
 }
@@ -99,31 +133,36 @@ export default class RNanimations extends Component {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: "#CCC",
+    padding: 20
   },
-  position: {
-    position: "absolute",
-    right: 45,
-    bottom: 45
+  modal: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderColor: "#000000",
+    borderRadius: 5,
+    borderWidth: 1,
+    padding: 10
   },
-  fabs: {
-    position: "absolute",
-    right: 0,
-    bottom: 0,
+  comments:{
+    flex: 1,
+    borderRadius: 5,
+    backgroundColor: "#FFFFFF"
   },
-  button: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: "center",
-    justifyContent: "center"
+  fakeText:{
+    padding: 10,
+    backgroundColor: "#FFF",
+    alignSelf: "center"
   },
-  flyout: {
-    backgroundColor: "#9439FF"
+  fakeComments: {
+    padding:40,
+    backgroundColor: "#EFEFEF"
   },
-  plus: {
-    fontWeight: "bold",
-     fontSize: 30,
-     color: "#00768F"
+  inputWrap: {
+    backgroundColor: "#000000"
+  },
+  textInput: {
+    backgroundColor: "#CCC"
   }
 });
 
